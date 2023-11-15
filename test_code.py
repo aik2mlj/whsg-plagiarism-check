@@ -1,5 +1,7 @@
 from data_utils.dataset import *
 
+a = [1, 2, 3, 4, 5, 6, 6, 12, 23]
+
 if __name__ == "__main__":
     train_analyses, valid_analyses = create_train_and_valid_analyses(truncate_length=6)
 

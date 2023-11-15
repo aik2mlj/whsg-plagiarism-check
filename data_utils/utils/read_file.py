@@ -2,8 +2,6 @@ import numpy as np
 import mir_eval
 import os
 from .song_analyzer import Pop909Song
-
-
 """
 Functions to read melody, chord and phrase label file from POP909 melody dataset.
 * Phrase label: human_label1.txt or human_label2.txt
@@ -12,15 +10,19 @@ Functions to read melody, chord and phrase label file from POP909 melody dataset
 
 def _cum_time_to_time_dur(d):
     d_cumsum = np.cumsum(d)
-    starts = np.insert(d_cumsum, 0, 0)[0: -1]
+    starts = np.insert(d_cumsum, 0, 0)[0 :-1]
     return starts, d
 
 
 def _parse_phrase_label(phrase_string):
-    phrase_start = [i for i, s in enumerate(phrase_string) if s.isalpha()] + [len(phrase_string)]
-    phrase_names = [phrase_string[phrase_start[i]: phrase_start[i + 1]] for i in range(len(phrase_start) - 1)]
+    phrase_start = [i for i, s in enumerate(phrase_string) if s.isalpha()
+                   ] + [len(phrase_string)]
+    phrase_names = [
+        phrase_string[phrase_start[i]: phrase_start[i + 1]]
+        for i in range(len(phrase_start) - 1)
+    ]
     phrase_type = [pn[0] for pn in phrase_names]
-    phrase_lgth = np.array([int(pn[1:]) for pn in phrase_names])
+    phrase_lgth = np.array([int(pn[1 :]) for pn in phrase_names])
     return phrase_names, phrase_type, phrase_lgth
 
 
@@ -35,9 +37,15 @@ def read_phrase_label(label_fn):
 
     phrase_starts, _ = _cum_time_to_time_dur(phrase_lgth)
 
-    phrases = [{'name': pn, 'type': pt, 'lgth': pl, 'start': ps}
-               for pn, pt, pl, ps in zip(phrase_names, phrase_type,
-                                         phrase_lgth, phrase_starts)]
+    phrases = [
+        {
+            'name': pn,
+            'type': pt,
+            'lgth': pl,
+            'start': ps
+        } for pn, pt, pl, ps in
+        zip(phrase_names, phrase_type, phrase_lgth, phrase_starts)
+    ]
     return phrases
 
 
@@ -93,7 +101,11 @@ def read_chord_string(c):
 
     root, chroma, bass = mir_eval.chord.encode(c_name)
     chroma = np.roll(chroma, shift=root)
-    return np.concatenate([np.array([root]), chroma, np.array([bass]), np.array([c_dur])])
+    return np.concatenate(
+        [np.array([root]), chroma,
+         np.array([bass]),
+         np.array([c_dur])]
+    )
 
 
 def _chord_to_nmat(chords):
@@ -115,8 +127,15 @@ def read_chord(chord_fn):
     return chord
 
 
-def read_data(data_fn, acc_fn, num_beat_per_measure=4, num_step_per_beat=4,
-              clean_chord_unit=None, song_name=None, label=1):
+def read_data(
+    data_fn,
+    acc_fn,
+    num_beat_per_measure=4,
+    num_step_per_beat=4,
+    clean_chord_unit=None,
+    song_name=None,
+    label=1
+):
     if label == 1:
         label_fn = os.path.join(data_fn, 'human_label1.txt')
     elif label == 2:
@@ -139,8 +158,9 @@ def read_data(data_fn, acc_fn, num_beat_per_measure=4, num_step_per_beat=4,
     acc = np.concatenate([bridge_track, piano_track], 0)
     acc = acc[acc[:, 0].argsort()]
 
-    song = Pop909Song(melody, chord, acc, label, num_beat_per_measure,
-                      num_step_per_beat, song_name, clean_chord_unit)
+    song = Pop909Song(
+        melody, chord, acc, label, num_beat_per_measure, num_step_per_beat, song_name,
+        clean_chord_unit
+    )
 
     return song
-

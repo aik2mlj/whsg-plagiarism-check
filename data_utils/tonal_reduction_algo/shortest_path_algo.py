@@ -49,7 +49,7 @@ def return_pitch_score(note_matrix):
     mid_pitch = (highest_pitch + lowest_pitch) / 2
     # mean_pitch = pitches.mean()
     if highest_pitch != lowest_pitch:
-        pitch_coef = np.sqrt((pitches - mid_pitch) ** 2) / (highest_pitch - lowest_pitch)
+        pitch_coef = np.sqrt((pitches - mid_pitch)**2) / (highest_pitch - lowest_pitch)
         pitch_coef = -(pitch_coef - 0.5) * 0.1 + 1
     else:
         pitch_coef = pitches / pitches
@@ -113,24 +113,31 @@ def detect_rel_type(note_matrix, i, j):
     return relation
 
 
-def create_adj_matrix(note_matrix, nbpm, nspb, dist_param=1.6,
-                      rhy_param=1., chord_param=1., pitch_param=1.,
-                      dur_param=1.):
+def create_adj_matrix(
+    note_matrix,
+    nbpm,
+    nspb,
+    dist_param=1.6,
+    rhy_param=1.,
+    chord_param=1.,
+    pitch_param=1.,
+    dur_param=1.
+):
     n_note = len(note_matrix)
     adj_matrix = -np.ones((n_note, n_note))
     # rel_score_map = {0: 0.1, 1: 0.1, 2: 0.3, 3: 1, 4: 1.5, 5: 3}
     rel_score_map = {0: 0.1, 1: 1, 2: 0.3, 3: 1.3, 4: 1.5, 5: 3}
 
-    rhythm_coef = return_rhythm_score(note_matrix, nbpm, nspb) ** rhy_param
-    chord_tone_coef = return_chord_tone_score(note_matrix) ** chord_param
-    pitch_coef = return_pitch_score(note_matrix) ** pitch_param
-    dur_coef = return_duration_score(note_matrix, nbpm, nspb) ** dur_param
+    rhythm_coef = return_rhythm_score(note_matrix, nbpm, nspb)**rhy_param
+    chord_tone_coef = return_chord_tone_score(note_matrix)**chord_param
+    pitch_coef = return_pitch_score(note_matrix)**pitch_param
+    dur_coef = return_duration_score(note_matrix, nbpm, nspb)**dur_param
 
     for i in range(n_note):
         for j in range(i + 1, n_note):
             rel_type = detect_rel_type(note_matrix, i, j)
             rel_score = rel_score_map[rel_type]
-            dist = (j - i) ** dist_param
+            dist = (j - i)**dist_param
             edge_weight = \
                 (rel_score + dist) * rhythm_coef[j] * chord_tone_coef[j] * \
                 pitch_coef[j] * dur_coef[j]
@@ -145,16 +152,25 @@ def compute_path_length(G, p):
     return length
 
 
-def find_tonal_shortest_paths(note_matrix, nbpm, nspb, num_path=1,
-                              dist_param=1.6, rhy_param=1., chord_param=1.,
-                              pitch_param=1., dur_param=1.):
+def find_tonal_shortest_paths(
+    note_matrix,
+    nbpm,
+    nspb,
+    num_path=1,
+    dist_param=1.6,
+    rhy_param=1.,
+    chord_param=1.,
+    pitch_param=1.,
+    dur_param=1.
+):
     if note_matrix.shape[0] == 0:
         return [None for _ in range(num_path)]
     n_node = len(note_matrix)
 
-    adj_mat = create_adj_matrix(note_matrix, nbpm, nspb,
-                                dist_param, rhy_param, chord_param,
-                                pitch_param, dur_param)
+    adj_mat = create_adj_matrix(
+        note_matrix, nbpm, nspb, dist_param, rhy_param, chord_param, pitch_param,
+        dur_param
+    )
 
     G = nx.DiGraph()
     for i in range(len(note_matrix)):
@@ -164,13 +180,19 @@ def find_tonal_shortest_paths(note_matrix, nbpm, nspb, num_path=1,
         for j in range(i + 1, len(G.nodes)):
             G.add_edge(i, j, weight=adj_mat[i, j])
 
-    all_paths = nx.shortest_simple_paths(G, source=0, target=n_node - 1,
-                                         weight='weight')
+    all_paths = nx.shortest_simple_paths(
+        G, source=0, target=n_node - 1, weight='weight'
+    )
 
     paths = []
     for path_id, path in enumerate(all_paths):
-        paths.append({'path': path, 'distance': compute_path_length(G, path),
-                      'reduction_rate': len(path) / n_node})
+        paths.append(
+            {
+                'path': path,
+                'distance': compute_path_length(G, path),
+                'reduction_rate': len(path) / n_node
+            }
+        )
         if path_id == num_path - 1:
             break
     return paths

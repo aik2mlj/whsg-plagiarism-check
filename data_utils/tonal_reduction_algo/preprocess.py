@@ -2,8 +2,9 @@ import warnings
 import numpy as np
 
 
-def remove_offset(note_mat, chord_mat, start_measure, measure_to_step_fn,
-                  measure_to_beat_fn):
+def remove_offset(
+    note_mat, chord_mat, start_measure, measure_to_step_fn, measure_to_beat_fn
+):
 
     start_step = measure_to_step_fn(start_measure)
     start_beat = measure_to_beat_fn(start_measure)
@@ -25,9 +26,12 @@ def chord_id_analysis(note_mat, chord_mat, step_to_beat_fn):
     note_onsets = note_mat[:, 0]
     onset_beats = step_to_beat_fn(note_onsets)
 
-    chord_ids = np.where(np.logical_and(
-        chord_starts <= onset_beats[:, np.newaxis],
-        chord_ends > onset_beats[:, np.newaxis]))  # (3, 4, 6, 7), (0, 1, 2, 3)
+    chord_ids = np.where(
+        np.logical_and(
+            chord_starts <= onset_beats[:, np.newaxis], chord_ends
+            > onset_beats[:, np.newaxis]
+        )
+    )  # (3, 4, 6, 7), (0, 1, 2, 3)
     assert (chord_ids[0] == np.arange(0, len(note_onsets))).all()
 
     return chord_ids[1]
@@ -47,11 +51,10 @@ def chord_tone_analysis(note_mat, chord_mat, chord_ids):
     # do anticipation
     next_c_exist_rows = chord_ids < chord_mat.shape[0] - 1
 
-    last_note_in_chord = chord_ids[0: -1] < chord_ids[1:]
+    last_note_in_chord = chord_ids[0 :-1] < chord_ids[1 :]
     last_note_in_chord = np.append(last_note_in_chord, True)
 
-    anticipation_condition = np.logical_and(next_c_exist_rows,
-                                            last_note_in_chord)
+    anticipation_condition = np.logical_and(next_c_exist_rows, last_note_in_chord)
     anticipation_condition_inds = np.where(anticipation_condition)[0]
     # print(anticipation_condition_inds)
     # print(chord_ids)
@@ -84,8 +87,10 @@ def chord_tone_analysis(note_mat, chord_mat, chord_ids):
     return is_chord_tone, is_anticiptation, tonal_chord_ids
 
 
-def bar_id_analysis(note_mat, chord_mat, chord_ids, is_anticipation,
-                    step_to_measure_fn, beat_to_measure_fn):
+def bar_id_analysis(
+    note_mat, chord_mat, chord_ids, is_anticipation, step_to_measure_fn,
+    beat_to_measure_fn
+):
     bar_id = step_to_measure_fn(note_mat[:, 0])
     tonal_bar_id = bar_id.copy()
 
@@ -94,10 +99,10 @@ def bar_id_analysis(note_mat, chord_mat, chord_ids, is_anticipation,
     return bar_id, tonal_bar_id
 
 
-def preprocess_data(note_mat, chord_mat, start_measure,
-                    measure_to_step_fn, measure_to_beat_fn,
-                    step_to_beat_fn,
-                    step_to_measure_fn, beat_to_measure_fn):
+def preprocess_data(
+    note_mat, chord_mat, start_measure, measure_to_step_fn, measure_to_beat_fn,
+    step_to_beat_fn, step_to_measure_fn, beat_to_measure_fn
+):
 
     note_mat, chord_mat, start_measure = \
         remove_offset(note_mat, chord_mat, start_measure,

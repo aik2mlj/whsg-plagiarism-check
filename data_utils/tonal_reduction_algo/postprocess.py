@@ -1,5 +1,4 @@
 import numpy as np
-
 """Clear path"""
 
 
@@ -18,8 +17,7 @@ def compute_chord_density(path, note_mat, chords):
         chord_density[chord_id] += 1
         chord_bin[chord_id].append(pid)
 
-    is_overflow = [cd > cmd for cd, cmd in
-                   zip(chord_density, chord_max_density)]
+    is_overflow = [cd > cmd for cd, cmd in zip(chord_density, chord_max_density)]
 
     return chord_density, chord_max_density, chord_bin, is_overflow
 
@@ -77,7 +75,6 @@ def compute_chord_density(path, note_mat, chords):
 #                             break
 #         modified_path_density[i] = density
 #     return edit_record, modified_path_density
-
 
 # def compute_chord_density(path, note_mat, chords):
 #     chord_density = [0 for _ in range(len(chords))]
@@ -142,7 +139,8 @@ def check_path(path, note_mat, chord):
                 note = note_mat[p]
 
                 # check note is chord tone of chord[i + 1]
-                if chord[i + 1, int(note[2] % 12) + 1] == 1 and prev_cd <= chord_max_density[i + 1] - 1:
+                if chord[i + 1, int(note[2] % 12) +
+                         1] == 1 and prev_cd <= chord_max_density[i + 1] - 1:
                     modify_list[i].append((j, 'm'))
                     current_cd -= 1
                     modify_chord_density[i + 1] += 1
@@ -183,12 +181,14 @@ def check_path(path, note_mat, chord):
                 new_chord_bin[i].append(note_mat[path[pid]])
     postprocess_reduction_rate = 1 - num_dropped / num_note
     # compute duration
-    report = {'num_prolonged': num_prolonged,
-              'num_moved': num_moved,
-              'num_dropped': num_dropped,
-              'red_rate_0': reduction_rate,
-              'red_rate_1': postprocess_reduction_rate,
-              'red_rate_final': postprocess_reduction_rate * reduction_rate}
+    report = {
+        'num_prolonged': num_prolonged,
+        'num_moved': num_moved,
+        'num_dropped': num_dropped,
+        'red_rate_0': reduction_rate,
+        'red_rate_1': postprocess_reduction_rate,
+        'red_rate_final': postprocess_reduction_rate * reduction_rate
+    }
     return new_chord_bin, report
 
 
@@ -243,14 +243,14 @@ def assign_duration(chord_mat, path_bin, nspb):
             notes.append((cur_start, note[1], dur, ict, i))
             cur_start += dur
 
-    new_notes = [list(notes[0])[0: 3]]
+    new_notes = [list(notes[0])[0 : 3]]
     for i in range(1, len(notes)):
         if notes[i][1] == notes[i - 1][1] and (
-                (not notes[i - 1][3] and notes[i][3]) or notes[i - 1][4] ==
-                notes[i][4]):
+            (not notes[i - 1][3] and notes[i][3]) or notes[i - 1][4] == notes[i][4]
+        ):
             new_notes[-1][2] = notes[i][0] - new_notes[-1][0] + notes[i][2]
         else:
             new_notes[-1][2] = notes[i][0] - new_notes[-1][0]
-            new_notes.append(list(notes[i])[0: 3])
+            new_notes.append(list(notes[i])[0 : 3])
     new_notes = np.array(new_notes).astype(np.int64)
     return new_notes

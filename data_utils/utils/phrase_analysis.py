@@ -1,8 +1,9 @@
 import numpy as np
 
 
-def phrase_to_phrase_roll(phrase_starts, phrase_lengths, phrase_types,
-                          total_measure=None):
+def phrase_to_phrase_roll(
+    phrase_starts, phrase_lengths, phrase_types, total_measure=None
+):
     def phrase_type_to_index(p_type):
         if p_type == 'A':
             return 0

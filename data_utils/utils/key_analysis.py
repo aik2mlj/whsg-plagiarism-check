@@ -1,8 +1,10 @@
 import numpy as np
 
 
-def key_estimation(mel_roll, chord_roll,
-                   phrase_starts, phrase_lengths, num_beat_per_measure, num_step_per_beat):
+def key_estimation(
+    mel_roll, chord_roll, phrase_starts, phrase_lengths, num_beat_per_measure,
+    num_step_per_beat
+):
     # chord_roll = self.chord_to_compact_pianoroll()
     key_template = np.array([1., 0., 1., 0., 1., 1., 0., 1., 0., 1., 0., 1.])
     key_templates = \
@@ -20,7 +22,7 @@ def key_estimation(mel_roll, chord_roll,
         start_step = start_beat * num_step_per_beat
         end_step = end_beat * num_step_per_beat
 
-        chroma_hist = chord_roll[2: 4, start_beat: end_beat].sum(0).sum(0)
+        chroma_hist = chord_roll[2 : 4, start_beat : end_beat].sum(0).sum(0)
 
         if not (chroma_hist == 0).all():
             chroma_hist = chroma_hist / chroma_hist.sum()
@@ -34,7 +36,7 @@ def key_estimation(mel_roll, chord_roll,
             scale = cand_key[0]
         scales.append(scale)
 
-        mel_hist = mel_roll[:, start_step: end_step].sum(0).sum(0)
+        mel_hist = mel_roll[:, start_step : end_step].sum(0).sum(0)
         major_score, minor_score = mel_hist[scale], mel_hist[(scale + 9) % 12]
         tonic = scale if major_score >= minor_score else (scale + 9) % 12
         tonics.append(tonic)
@@ -55,14 +57,19 @@ def key_to_key_roll(keys, total_measure, phrase_lengths, phrase_starts):
     for i in range(len(phrase_lengths)):
         start_measure = phrase_starts[i]
         lgth = phrase_lengths[i]
-        key_roll[0, start_measure: start_measure + lgth, keys[0, i]] = 1
-        key_roll[1, start_measure: start_measure + lgth] = key_templates[keys[1, i]]
+        key_roll[0, start_measure : start_measure + lgth, keys[0, i]] = 1
+        key_roll[1, start_measure : start_measure + lgth] = key_templates[keys[1, i]]
 
     return key_roll
 
 
-def get_key_roll(mel_roll, chord_roll, phrase_starts, phrase_lengths, total_measure,
-                 num_beat_per_measure, num_step_per_beat):
-    keys = key_estimation(mel_roll, chord_roll, phrase_starts, phrase_lengths, num_beat_per_measure, num_step_per_beat)
+def get_key_roll(
+    mel_roll, chord_roll, phrase_starts, phrase_lengths, total_measure,
+    num_beat_per_measure, num_step_per_beat
+):
+    keys = key_estimation(
+        mel_roll, chord_roll, phrase_starts, phrase_lengths, num_beat_per_measure,
+        num_step_per_beat
+    )
     key_roll = key_to_key_roll(keys, total_measure, phrase_lengths, phrase_starts)
     return key_roll

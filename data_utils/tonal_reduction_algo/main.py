@@ -7,10 +7,14 @@ This file aims to provide api calls for tonal reduction
 
 
 class TrAlgo:
-
-    def __init__(self, distance_factor=1.6,
-                 onset_factor=1.0, chord_factor=1.0, pitch_factor=1.0,
-                 duration_factor=1.0):
+    def __init__(
+        self,
+        distance_factor=1.6,
+        onset_factor=1.0,
+        chord_factor=1.0,
+        pitch_factor=1.0,
+        duration_factor=1.0
+    ):
         self.distance_factor = distance_factor
         self.onset_factor = onset_factor
         self.chord_factor = chord_factor
@@ -27,9 +31,10 @@ class TrAlgo:
         self._reduction_mats = None
         self._report = None
 
-    def preprocess_data(self, note_mat, chord_mat,
-                        start_measure, num_beat_per_measure, num_step_per_beat,
-                        require_convert):
+    def preprocess_data(
+        self, note_mat, chord_mat, start_measure, num_beat_per_measure,
+        num_step_per_beat, require_convert
+    ):
         def measure_to_step_fn(measure):
             return measure * num_beat_per_measure * num_step_per_beat
 
@@ -47,16 +52,19 @@ class TrAlgo:
 
         if require_convert:
             note_mat, chord_mat, start_measure = preprocess_data(
-                note_mat, chord_mat, start_measure,
-                measure_to_step_fn, measure_to_beat_fn, step_to_beat_fn,
-                step_to_measure_fn, beat_to_measure_fn
+                note_mat, chord_mat, start_measure, measure_to_step_fn,
+                measure_to_beat_fn, step_to_beat_fn, step_to_measure_fn,
+                beat_to_measure_fn
             )
 
-        self.fill_data(note_mat, chord_mat, start_measure, num_beat_per_measure,
-                       num_step_per_beat)
+        self.fill_data(
+            note_mat, chord_mat, start_measure, num_beat_per_measure, num_step_per_beat
+        )
 
-    def fill_data(self, note_mat, chord_mat, start_measure,
-                  num_beat_per_measure, num_step_per_beat):
+    def fill_data(
+        self, note_mat, chord_mat, start_measure, num_beat_per_measure,
+        num_step_per_beat
+    ):
         self._note_mat = note_mat
         self._chord_mat = chord_mat
         self._start_measure = start_measure
@@ -71,17 +79,16 @@ class TrAlgo:
 
     def find_shortest_paths(self, num_path=1):
         return find_tonal_shortest_paths(
-            self._note_mat, self._num_beat_per_measure,
-            self._num_step_per_beat, num_path,
-            self.distance_factor, self.onset_factor,
-            self.chord_factor, self.pitch_factor, self.duration_factor)
+            self._note_mat, self._num_beat_per_measure, self._num_step_per_beat,
+            num_path, self.distance_factor, self.onset_factor, self.chord_factor,
+            self.pitch_factor, self.duration_factor
+        )
 
     def path_to_chord_bins(self, path):
         return check_path(path, self._note_mat, self._chord_mat)
 
     def chord_bins_to_reduction_mat(self, chord_bin):
-        return assign_duration(self._chord_mat, chord_bin,
-                               self._num_step_per_beat)
+        return assign_duration(self._chord_mat, chord_bin, self._num_step_per_beat)
 
     def algo(self, num_path=1):
         # find top-k shortest paths and compute distance
@@ -92,8 +99,7 @@ class TrAlgo:
 
         chord_bins, reduction_report = \
             zip(*[self.path_to_chord_bins(path) for path in paths])
-        reduction_mats = [self.chord_bins_to_reduction_mat(cb)
-                          for cb in chord_bins]
+        reduction_mats = [self.chord_bins_to_reduction_mat(cb) for cb in chord_bins]
         self._reduction_mats = reduction_mats
         self._report = reduction_report
 
@@ -118,14 +124,23 @@ class TrAlgo:
 
         return note_mat, chord_mat, reduction_mats
 
-    def run(self, note_mat, chord_mat, start_measure, num_beat_per_measure,
-            num_step_per_beat, require_convert=True, num_path=1):
+    def run(
+        self,
+        note_mat,
+        chord_mat,
+        start_measure,
+        num_beat_per_measure,
+        num_step_per_beat,
+        require_convert=True,
+        num_path=1
+    ):
         # print(note_mat)
         # print(chord_mat)
         # print(start_measure)
-        self.preprocess_data(note_mat, chord_mat, start_measure,
-                             num_beat_per_measure, num_step_per_beat,
-                             require_convert)
+        self.preprocess_data(
+            note_mat, chord_mat, start_measure, num_beat_per_measure, num_step_per_beat,
+            require_convert
+        )
         self.algo(num_path)
         note_mat, chord_mat, reduction_mats = self.output()
         return note_mat, chord_mat, reduction_mats
