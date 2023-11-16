@@ -1,0 +1,13 @@
+[window=2,hop=1]
+ours: 0.7193, 0.1884
+train: 1, 0
+val: 0.6651, 0.1244
+polyff+phl: 0.6345, 0.1405
+remi+phl: 0.6126, 0.1116
+
+[window=1,hop=1]
+ours: 0.8583, 0.1334
+train: 1, 0
+val: 0.8532, 0.1221
+polyff+phl: 0.8286, 0.1337
+remi+phl: 0.7884, 0.1122

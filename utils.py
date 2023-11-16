@@ -7,6 +7,8 @@ import music21
 
 BIN = 4
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def get_music(midi_path):
     music = muspy.read_midi(midi_path)
@@ -68,7 +70,7 @@ def nmat_to_melprmat(nmat, num_bar, n_step=16):  # only 1 bar!
             prmat_ec2vae[i, 128] = 1
         t = o + d
     prmat_ec2vae = prmat_ec2vae.reshape((num_bar, n_step, 130))
-    return prmat_ec2vae
+    return prmat_ec2vae.to(device)
 
 
 def nmat_to_melchroma(nmat, num_bar, n_step=16):  # only 1 bar!
@@ -79,7 +81,7 @@ def nmat_to_melchroma(nmat, num_bar, n_step=16):  # only 1 bar!
             break
         prmat[o, p % 12] = 1
     prmat = prmat.reshape((num_bar, n_step, 12))
-    return prmat
+    return prmat.to(device)
 
 
 def prmat_to_midi_file(prmat, fpath, labels=None):
