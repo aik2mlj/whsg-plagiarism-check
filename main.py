@@ -1,12 +1,13 @@
-import os
 import argparse
+import os
+from math import ceil
+
 import numpy as np
-
 import torch
-import utils
-
+from matplotlib import pyplot as plt
 from tqdm import tqdm
 
+import utils
 from data_utils.dataset import (
     ACC_DATASET_PATH,
     DATASET_PATH,
@@ -66,6 +67,15 @@ def get_segment_w_rolling(prmat, seg_len):
     return prmat_seg
 
 
+def clean_sparse_segments(prmats):
+    print(prmats.shape)
+    print("cleaning empty/sparse segments...")
+    empty_index = torch.abs(prmats).sum(dim=(1, 2)) > 1
+    prmats = prmats[empty_index]
+    print(prmats.shape)
+    return prmats
+
+
 def get_melprmat(nmat, seg_len=2):
     prmats = []
     for mel, num_bar in tqdm(nmat, desc="nmat to melprmat"):
@@ -74,12 +84,7 @@ def get_melprmat(nmat, seg_len=2):
         prmat_seg = get_segment_w_rolling(prmat, seg_len)
         prmats.append(prmat_seg)
     prmats = torch.concat(prmats)
-    print(prmats.shape)
-
-    print("cleaning empty segments...")
-    empty_index = torch.abs(prmats).sum(dim=(1, 2)) > 0
-    prmats = prmats[empty_index]
-    print(prmats.shape)
+    prmats = clean_sparse_segments(prmats)
 
     return prmats.to(device)
 
@@ -92,12 +97,7 @@ def get_melchroma(nmat, seg_len=2):
         prmat_seg = get_segment_w_rolling(prmat, seg_len)
         prmats.append(prmat_seg)
     prmats = torch.concat(prmats)
-    print(prmats.shape)
-
-    print("cleaning empty segments...")
-    empty_index = torch.abs(prmats).sum(dim=(1, 2)) > 0
-    prmats = prmats[empty_index]
-    print(prmats.shape)
+    prmats = clean_sparse_segments(prmats)
 
     return prmats.to(device)
 
@@ -129,12 +129,9 @@ def compute_notewise_copy_ratio(mel, train_mels):
             ratio = max(
                 ratio, (2 * num_copy / (num_train_notes + num_mel_notes)).max().item()
             )
-        ratios.append(ratio)
-    ratios = np.array(ratios)
-    ratio_mean = ratios.mean(axis=0)
-    ratio_std = ratios.std(axis=0)
-    print(ratio_mean, ratio_std)
-    return ratio_mean, ratio_std
+        ratios.append(float(ratio))
+    ratios = np.array(ratios, dtype=float)
+    return ratios
 
 
 def get_nmats_from_dir(dir, note_tracks):
@@ -148,15 +145,22 @@ def get_nmats_from_dir(dir, note_tracks):
             print(phrase_config, num_bar)
             for f in tqdm(os.scandir(phrase_anno.path)):
                 fpath = f.path
-                music = utils.get_music(fpath)
-                nmat = utils.get_note_matrix(music, note_tracks)
+                nmat = get_nmat_from_midi(fpath, note_tracks)
                 nmats.append((nmat, num_bar))
     return nmats
+
+
+def get_nmat_from_midi(fpath, note_tracks):
+    music = utils.get_music(fpath)
+    nmat = utils.get_note_matrix(music, note_tracks)
+    return nmat
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--type")
+    parser.add_argument("--midi", help="midi file input")
+    parser.add_argument("--note-track", default=0)
     parser.add_argument("--seg-len", default=2)
     args = parser.parse_args()
     seg_len = int(args.seg_len)
@@ -164,33 +168,85 @@ if __name__ == "__main__":
     train_nmats, val_nmats = get_train_val_mel_nmats()
     train_melchroma = get_melchroma(train_nmats, seg_len)
 
-    match args.type:
-        case "ours":
-            nmats = get_nmats_from_dir("./128samples/ours", [1])
-            mel = get_melchroma(nmats, seg_len)
-        case "polyff+phl":
-            nmats = get_nmats_from_dir("./128samples/diff+phrase/mel+acc_samples", [0])
-            mel = get_melchroma(nmats, seg_len)
-        case "train":
-            nmats = train_nmats[: 20]
-            mel = get_melchroma(nmats, seg_len)
+    def output_result(mel, run_type):
+        ratios = compute_notewise_copy_ratio(mel, train_melchroma)
+        ratio_mean = ratios.mean(axis=0)
+        ratio_std = ratios.std(axis=0)
+        plt.clf()
+        plt.hist(ratios, bins=100, range=(0., 1.))
+        plt.savefig(f"./plots/{run_type}_{seg_len}.png")
+        with open("output.txt", "a") as f:
+            f.write(f"\n{run_type}: {ratio_mean:.4f}, {ratio_std:.4f}")
 
-        case "val":
-            nmats = val_nmats
-            mel = get_melchroma(nmats, seg_len)
-        case "remi+phl":
-            nmats = get_nmats_from_dir("./128_remi/mel_32", [0])
-            mel = get_melchroma(nmats, seg_len)
-        case "copybot":
-            prmats = []
-            for mel, num_bar in train_nmats:
-                prmats.append(utils.nmat_to_melchroma(mel, num_bar))
-            prmats = torch.cat(prmats, dim=0)
-            random_indices = torch.randint(len(prmats), (128 * 40, ))
-            mel = get_segment_w_rolling(prmats[random_indices], seg_len)
-            print(mel.shape)
+    def ours():
+        nmats = get_nmats_from_dir("./128samples/ours", [1])
+        mel = get_melchroma(nmats, seg_len)
+        output_result(mel, "ours")
 
-        case _:
-            raise RuntimeError
+    def ours_new():
+        dir = "./128_new"
+        for epoch in os.scandir(dir):
+            if epoch.is_dir():
+                subdir = epoch.path
+                nmats = get_nmats_from_dir(subdir, [1])
+                mel = get_melchroma(nmats, seg_len)
+                output_result(mel, f"ours_new_epoch{epoch.name}")
 
-    compute_notewise_copy_ratio(mel, train_melchroma)
+    def polyff_phl():
+        nmats = get_nmats_from_dir("./128samples/diff+phrase/mel+acc_samples", [0])
+        mel = get_melchroma(nmats, seg_len)
+        output_result(mel, "polyff_phl")
+
+    def train():
+        nmats = train_nmats[: 20]
+        mel = get_melchroma(nmats, seg_len)
+        output_result(mel, "train")
+
+    def val():
+        nmats = val_nmats
+        mel = get_melchroma(nmats, seg_len)
+        output_result(mel, "val")
+
+    def remi_phl():
+        nmats = get_nmats_from_dir("./128_remi/mel_32", [0])
+        mel = get_melchroma(nmats, seg_len)
+        output_result(mel, "remi_phl")
+
+    def copybot():
+        prmats = []
+        for mel, num_bar in train_nmats:
+            prmats.append(utils.nmat_to_melchroma(mel, num_bar))
+        prmats = torch.concat(prmats)
+        random_indices = torch.randint(len(prmats), (128 * 40, ))
+        mel = get_segment_w_rolling(prmats[random_indices], seg_len)
+        mel = clean_sparse_segments(mel)
+        output_result(mel, "copybot")
+
+    funcs = [ours, polyff_phl, train, val, remi_phl, copybot]
+
+    if args.midi is not None:
+        fname = args.midi.split("/")[-1]
+        nmat = get_nmat_from_midi(args.midi, [int(args.note_track)])
+        num_bar = int(ceil((np.array(nmat)[:, 0] + np.array(nmat)[:, 2]).max() / 16))
+        print("num_bar:", num_bar)
+        nmats = [(nmat, num_bar)]
+        mel = get_melchroma(nmats, seg_len)
+        output_result(mel, f"{fname}")
+    else:
+        if args.type == "ours":
+            ours()
+        if args.type == "ours_new":
+            ours_new()
+        elif args.type == "polyff+phl":
+            polyff_phl()
+        elif args.type == "train":
+            train()
+        elif args.type == "val":
+            val()
+        elif args.type == "remi+phl":
+            remi_phl()
+        elif args.type == "copybot":
+            copybot()
+        else:
+            for func in funcs:
+                func()
