@@ -73,6 +73,31 @@ def nmat_to_melprmat(nmat, num_bar, n_step=16):  # only 1 bar!
     return prmat_ec2vae.to(device)
 
 
+def nmat_to_chd_ec2vae(chd_nmat, num_bar, n_step=16):  # only 1 bar
+    """
+    track indicates the chord track in the midi file
+    """
+    chd = torch.zeros((num_bar * n_step, 12))
+    idx = 0
+    while idx < len(chd_nmat):
+        t = chd_nmat[idx][0]
+        d = chd_nmat[idx][2]
+        ps = []
+        while idx < len(chd_nmat) and chd_nmat[idx][0] == t:
+            ps.append(chd_nmat[idx][1])
+            idx += 1
+        if len(ps) == 1:
+            continue  # only bass changed, ignore
+
+        tmp_chd = [p % 12 for p in ps[1 :]]
+        # tmp_chd = reduce_chd_quality(tmp_chd)
+
+        for p in tmp_chd:
+            chd[t : min(num_bar * n_step, t + d), p] = 1
+    chd = chd.reshape((num_bar, n_step, 12))
+    return chd
+
+
 def nmat_to_melchroma(nmat, num_bar, n_step=16):  # only 1 bar!
     """pitch % 12, without sustain & rest"""
     prmat = torch.zeros((num_bar * n_step, 12))
