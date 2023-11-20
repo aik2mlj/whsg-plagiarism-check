@@ -41,7 +41,7 @@ def augment_to_12keys(nmats):
     return augmented
 
 
-def store_latent_code(train_melchd, batch_size=500):
+def store_latent_code(train_melchd, fpath, batch_size=500):
     """
     mel, train_mels should be melchroma #[:, 16*seg_len, 12]
     """
@@ -63,7 +63,7 @@ def store_latent_code(train_melchd, batch_size=500):
     zrs = torch.concat(zrs, dim=0).detach().cpu().numpy()
     print(zps.shape, zrs.shape)
     savez = {"p": zps, "r": zrs}
-    np.savez("./latents/train_latent.npz", **savez)
+    np.savez(fpath, **savez)
 
 
 if __name__ == "__main__":
@@ -71,11 +71,16 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", default=500)
     args = parser.parse_args()
     train_nmats, val_nmats = main_latent.get_train_val_melchd_nmats()
-    # augment_to_12keys(train_nmats)
+    train_augmented_nmats = augment_to_12keys(train_nmats)
     # test_midis(train_nmats)
 
-    train_melchd = main_latent.get_ec2vae_inputs(train_nmats, 2)
-    store_latent_code(train_melchd, batch_size=int(args.batch_size))
+    for aug, train_nmats in enumerate(train_augmented_nmats):
+        train_melchd = main_latent.get_ec2vae_inputs(train_nmats, 2)
+        store_latent_code(
+            train_melchd,
+            f"./latents/train_aug{aug}.npz",
+            batch_size=int(args.batch_size)
+        )
 
     # nmats = main_latent.get_nmats_from_dir("./test_data/128samples/ours", [1], [2])
     # test_midis(nmats)

@@ -108,8 +108,7 @@ def compute_latent_copy_ratio(latent, train_latent):
     """
     # truncate melprmat to only onset & pitch, without rest & sustain
     zp, zr = latent
-    train_zp, train_zr = train_latent
-    train_size = train_zp.shape[0]
+    train_size = train_latent[0][0].shape[0]
 
     ratios_p = []
     ratios_r = []
@@ -123,14 +122,16 @@ def compute_latent_copy_ratio(latent, train_latent):
             zp_expand = zp_2bar.expand(train_size, -1)
             zr_expand = zr_2bar.expand(train_size, -1)
 
-            zp_sim = max(
-                zp_sim,
-                F.cosine_similarity(zp_expand, train_zp, dim=-1).max().item()
-            )
-            zr_sim = max(
-                zr_sim,
-                F.cosine_similarity(zr_expand, train_zr, dim=-1).max().item()
-            )
+            for train_aug in train_latent:
+                train_zp, train_zr = train_aug
+                zp_sim = max(
+                    zp_sim,
+                    F.cosine_similarity(zp_expand, train_zp, dim=-1).max().item()
+                )
+                zr_sim = max(
+                    zr_sim,
+                    F.cosine_similarity(zr_expand, train_zr, dim=-1).max().item()
+                )
             ratios_p.append(float(zp_sim))
             ratios_r.append(float(zr_sim))
     ratios_p = np.array(ratios_p, dtype=float)
@@ -206,7 +207,9 @@ if __name__ == "__main__":
     # train_mel, train_chd = get_ec2vae_inputs(train_nmats, seg_len)
     # train_melchd = train_mel[: 100], train_chd[: 100]
     # train_melchd = train_mel, train_chd
-    train_latent = load_latent_npz("./latents/train_latent.npz")
+    train_latent = []
+    for i in range(12):
+        train_latent.append(load_latent_npz(f"./latents/train_aug{i}.npz"))
 
     def output_result(melchd, name, latent=None):
         latent_path = f"./latents/{name}.npz"
@@ -287,7 +290,7 @@ if __name__ == "__main__":
         output_result(melchd, "copybot")
 
     def copybot_z(noise_scale):
-        train_zp, train_zr = train_latent
+        train_zp, train_zr = train_latent[6]  # the untransposed training set
         random_indices = torch.randint(len(train_zp), (128 * 40, ))
         zp, zr = train_zp[random_indices], train_zr[random_indices]
         noise_zp = torch.normal(0., 1., zp.shape).to(device)
