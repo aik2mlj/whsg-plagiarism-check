@@ -27,6 +27,9 @@ ec2vae_enc = ec2vae_enc.to(device)
 
 
 def get_train_val_melchd_nmats():
+    """
+    return list[(melody, chord, num_bar], in nmats
+    """
     train_nmat = []
     valid_nmat = []
     train_ids, valid_ids = load_split_file("./data/pop909_mel/split.npz")
@@ -64,7 +67,7 @@ def get_train_val_melchd_nmats():
 def get_ec2vae_inputs(nmats, seg_len=2):
     prmats = []
     chds = []
-    for mel, chd, num_bar in tqdm(nmats, desc="nmat to melprmat"):
+    for mel, chd, num_bar in tqdm(nmats, desc="nmat to ec2vae"):
         # get 1-bar melprmat
         prmat = utils.nmat_to_melprmat(mel, num_bar)
         chd_ec2vae = utils.nmat_to_chd_ec2vae(chd, num_bar)
@@ -293,7 +296,7 @@ if __name__ == "__main__":
         zr = noise_zr * noise_scale + zr * (1. - noise_scale)
         output_result(None, "copybot_z", (zp, zr))
 
-    funcs = [ours, ours_new, polyff_phl, train, val, remi_phl, copybot]
+    funcs = [ours, ours_new, polyff_phl, train, val, remi_phl, copybot, copybot_z]
 
     if args.midi is not None:
         fname = args.midi.split("/")[-1]

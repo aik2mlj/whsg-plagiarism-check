@@ -63,12 +63,14 @@ def nmat_to_melprmat(nmat, num_bar, n_step=16):  # only 1 bar!
         if o >= num_bar * n_step:
             break
         if o > t:
-            for i in range(t + 1, o):
+            for i in range(t, o):
                 prmat_ec2vae[i, 129] = 1  # rest
         prmat_ec2vae[o, p] = 1
         for i in range(o + 1, min(o + d, num_bar * n_step)):
             prmat_ec2vae[i, 128] = 1
         t = o + d
+    if t < num_bar * n_step:
+        prmat_ec2vae[t : num_bar * n_step, 129] = 1
     prmat_ec2vae = prmat_ec2vae.reshape((num_bar, n_step, 130))
     return prmat_ec2vae.to(device)
 
@@ -79,21 +81,40 @@ def nmat_to_chd_ec2vae(chd_nmat, num_bar, n_step=16):  # only 1 bar
     """
     chd = torch.zeros((num_bar * n_step, 12))
     idx = 0
-    while idx < len(chd_nmat):
-        t = chd_nmat[idx][0]
-        d = chd_nmat[idx][2]
-        ps = []
-        while idx < len(chd_nmat) and chd_nmat[idx][0] == t:
-            ps.append(chd_nmat[idx][1])
+    chd_nmat = np.array(chd_nmat)
+    if chd_nmat.shape[1] == 16:
+        # chd_nmat from training
+        # chd_nmat : [:, 16]
+        #     0: start time (in beats, not in steps)
+        #     1: root
+        #     2-13: absolute chroma
+        #     14: bass
+        #     15: dur (in beats, not in steps)
+        while idx < len(chd_nmat):
+            t = chd_nmat[idx][0] * 4
+            d = chd_nmat[idx][15] * 4
+            chd[t : min(num_bar * n_step, t + d), :] = torch.from_numpy(
+                chd_nmat[idx][2 : 14]
+            )
             idx += 1
-        if len(ps) == 1:
-            continue  # only bass changed, ignore
+    elif chd_nmat.shape[1] == 3:
+        while idx < len(chd_nmat):
+            t = chd_nmat[idx][0]
+            d = chd_nmat[idx][2]
+            ps = []
+            while idx < len(chd_nmat) and chd_nmat[idx][0] == t:
+                ps.append(chd_nmat[idx][1])
+                idx += 1
+            if len(ps) == 1:
+                continue  # only bass changed, ignore
 
-        tmp_chd = [p % 12 for p in ps[1 :]]
-        # tmp_chd = reduce_chd_quality(tmp_chd)
+            tmp_chd = [p % 12 for p in ps[1 :]]
+            # tmp_chd = reduce_chd_quality(tmp_chd)
 
-        for p in tmp_chd:
-            chd[t : min(num_bar * n_step, t + d), p] = 1
+            for p in tmp_chd:
+                chd[t : min(num_bar * n_step, t + d), p] = 1
+    else:
+        raise RuntimeError
     chd = chd.reshape((num_bar, n_step, 12))
     return chd
 
@@ -107,6 +128,66 @@ def nmat_to_melchroma(nmat, num_bar, n_step=16):  # only 1 bar!
         prmat[o, p % 12] = 1
     prmat = prmat.reshape((num_bar, n_step, 12))
     return prmat.to(device)
+
+
+def nmat_to_midi_file(nmat, fpath):
+    """
+    nmat: (#, 3)
+        onset, pitch, duration
+    """
+    if "Tensor" in str(type(nmat)):
+        nmat = nmat.cpu().detach().numpy()
+    midi = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program("Acoustic Grand Piano")
+    piano = pm.Instrument(program=piano_program)
+    for note in nmat:
+        if note[2] > 0:
+            piano.notes.append(
+                pm.Note(
+                    velocity=80,
+                    pitch=note[1],
+                    start=note[0] * 1 / 8,
+                    end=(note[0] + note[2]) * 1 / 8,
+                )
+            )
+    midi.instruments.append(piano)
+    midi.write(fpath)
+
+
+def melprmat_to_midi_file(sample_roll, output='sample.mid'):
+    # melprmat: (B, 32, 130)
+    music = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program('Acoustic Grand Piano')
+    piano = pm.Instrument(program=piano_program)
+    t = 0
+    if "Tensor" in str(type(sample_roll)):
+        sample_roll = sample_roll.cpu().detach().numpy()
+    for bar_ind, bars in enumerate(sample_roll):
+        for step_ind, step in enumerate(bars):
+            pitch = int(np.argmax(step))
+            if pitch < 128:
+                note = pm.Note(velocity=100, pitch=pitch, start=t, end=t + 1 / 8)
+                t += 1 / 8
+                piano.notes.append(note)
+            elif pitch == 128:
+                if len(piano.notes) > 0:
+                    note = piano.notes.pop()
+                else:
+                    # p = np.random.randint(60, 72)
+                    # note = pm.Note(velocity=100, pitch=int(p), start=0, end=t)
+                    raise RuntimeError
+                note = pm.Note(
+                    velocity=100,
+                    pitch=note.pitch,
+                    start=note.start,
+                    end=note.end + 1 / 8
+                )
+                piano.notes.append(note)
+                t += 1 / 8
+            elif pitch == 129:
+                t += 1 / 8
+    music.instruments.append(piano)
+    music.write(output)
 
 
 def prmat_to_midi_file(prmat, fpath, labels=None):
@@ -202,31 +283,32 @@ def get_chord(music, num_2bar, tracks=[1]):
     return chd
 
 
-def get_chord_ec2vae(music, num_2bar, tracks=[1]):
-    """
-    track indicates the chord track in the midi file
-    """
-    chd_nmat = get_note_matrix(music, tracks)
-
-    chd = torch.zeros((num_2bar * 32, 12))
-    idx = 0
-    while idx < len(chd_nmat):
-        t = chd_nmat[idx][0]
-        d = chd_nmat[idx][2]
-        ps = []
-        while idx < len(chd_nmat) and chd_nmat[idx][0] == t:
-            ps.append(chd_nmat[idx][1])
-            idx += 1
-        if len(ps) == 1:
-            continue  # only bass changed, ignore
-
-        tmp_chd = [p % 12 for p in ps[1 :]]
-        tmp_chd = reduce_chd_quality(tmp_chd)
-
-        for p in tmp_chd:
-            chd[t : min(num_2bar * 32, t + d), p] = 1
-    chd = chd.reshape((num_2bar, 32, 12))
-    return chd
+# def get_chord_ec2vae(music, num_2bar, tracks=[1]):
+#     """
+#     track indicates the chord track in the midi file
+#     """
+#     chd_nmat = get_note_matrix(music, tracks)
+#
+#     chd = torch.zeros((num_2bar * 32, 12))
+#     idx = 0
+#     while idx < len(chd_nmat):
+#         t = chd_nmat[idx][0]
+#         d = chd_nmat[idx][2]
+#         ps = []
+#         while idx < len(chd_nmat) and chd_nmat[idx][0] == t:
+#             ps.append(chd_nmat[idx][1])
+#             idx += 1
+#         if len(ps) == 1:
+#             continue  # only bass changed, ignore
+#
+#         tmp_chd = [p % 12 for p in ps[1 :]]
+#         tmp_chd = reduce_chd_quality(tmp_chd)
+#
+#         for p in tmp_chd:
+#             chd[t : min(num_2bar * 32, t + d), p] = 1
+#     chd = chd.reshape((num_2bar, 32, 12))
+#     return chd
+#
 
 
 def chd_to_midi_file(chords, output_fpath, one_beat=0.5):
@@ -249,6 +331,8 @@ def chd_to_midi_file(chords, output_fpath, one_beat=0.5):
                 root = int(chord[0 : 12].argmax())
                 chroma = chord[12 : 24].astype(int)
                 bass = int(chord[24 :].argmax())
+            else:
+                raise RuntimeError
 
             chroma = np.roll(chroma, -bass)
             c3 = 48
@@ -259,6 +343,39 @@ def chd_to_midi_file(chords, output_fpath, one_beat=0.5):
                         pitch=c3 + i + bass,
                         start=t * one_beat,
                         end=(t + 1) * one_beat,
+                    )
+                    piano.notes.append(note)
+            t += 1
+
+    midi.instruments.append(piano)
+    midi.write(output_fpath)
+
+
+def chd_ec2vae_to_midi_file(chords, output_fpath, one_step=1 / 8):
+    """
+    retrieve midi from chords
+    """
+    if "Tensor" in str(type(chords)):
+        chords = chords.cpu().detach().numpy()
+    midi = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program("Acoustic Grand Piano")
+    piano = pm.Instrument(program=piano_program)
+    t = 0.0
+    for seg in chords:
+        for beat, chord in enumerate(seg):
+            if chord.shape[0] == 12:
+                chroma = chord.astype(int)
+            else:
+                raise RuntimeError
+
+            c3 = 48
+            for i, n in enumerate(chroma):
+                if n == 1:
+                    note = pm.Note(
+                        velocity=80,
+                        pitch=c3 + i,
+                        start=t * one_step,
+                        end=(t + 1) * one_step,
                     )
                     piano.notes.append(note)
             t += 1
