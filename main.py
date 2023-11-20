@@ -76,19 +76,6 @@ def clean_sparse_segments(prmats):
     return prmats
 
 
-def get_melprmat(nmat, seg_len=2):
-    prmats = []
-    for mel, num_bar in tqdm(nmat, desc="nmat to melprmat"):
-        # get 1-bar melprmat
-        prmat = utils.nmat_to_melprmat(mel, num_bar)
-        prmat_seg = get_segment_w_rolling(prmat, seg_len)
-        prmats.append(prmat_seg)
-    prmats = torch.concat(prmats)
-    prmats = clean_sparse_segments(prmats)
-
-    return prmats.to(device)
-
-
 def get_melchroma(nmat, seg_len=2):
     prmats = []
     for mel, num_bar in tqdm(nmat, desc="nmat to melchroma"):
@@ -222,7 +209,7 @@ if __name__ == "__main__":
         mel = clean_sparse_segments(mel)
         output_result(mel, "copybot")
 
-    funcs = [ours, polyff_phl, train, val, remi_phl, copybot]
+    funcs = [ours, ours_new, polyff_phl, train, val, remi_phl, copybot]
 
     if args.midi is not None:
         fname = args.midi.split("/")[-1]
