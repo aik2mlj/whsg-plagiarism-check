@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
+from ec2vae.model import EC2VAE
+
 import utils
 from data_utils.dataset import (
     ACC_DATASET_PATH,
@@ -24,6 +26,13 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 ec2vae_enc = Ec2VaeEncoder.create_2bar_encoder()
 ec2vae_enc.load_state_dict(torch.load("./pretrained_models/ec2vae_enc_2bar.pt"))
 ec2vae_enc = ec2vae_enc.to(device)
+
+# initialize the model
+ec2vae_model = EC2VAE.init_model()
+
+# load model parameter
+ec2vae_param_path = './ec2vae/model_param/ec2vae-v1.pt'
+ec2vae_model.load_model(ec2vae_param_path)
 
 
 def get_train_val_melchd_nmats():
@@ -198,13 +207,14 @@ if __name__ == "__main__":
     parser.add_argument("--chd-track", default=1)
     parser.add_argument("--seg-len", default=2)
     parser.add_argument("--batch-size", default=500)
-    parser.add_argument("--noise-scale", default=0.1)
+    parser.add_argument("--ns-p", default=0.1)
+    parser.add_argument("--ns-r", default=0.1)
     args = parser.parse_args()
     seg_len = int(args.seg_len)
     batch_size = int(args.batch_size)
 
     train_nmats, val_nmats = get_train_val_melchd_nmats()
-    # train_mel, train_chd = get_ec2vae_inputs(train_nmats, seg_len)
+    train_mel, train_chd = get_ec2vae_inputs(train_nmats, seg_len)
     # train_melchd = train_mel[: 100], train_chd[: 100]
     # train_melchd = train_mel, train_chd
     train_latent = []
@@ -289,15 +299,23 @@ if __name__ == "__main__":
         melchd = mel.to(device), chd.to(device)
         output_result(melchd, "copybot")
 
-    def copybot_z(noise_scale):
+    def copybot_z(ns_p, ns_r):
         train_zp, train_zr = train_latent[6]  # the untransposed training set
         random_indices = torch.randint(len(train_zp), (128 * 40, ))
         zp, zr = train_zp[random_indices], train_zr[random_indices]
         noise_zp = torch.normal(0., 1., zp.shape).to(device)
         noise_zr = torch.normal(0., 1., zr.shape).to(device)
-        zp = noise_zp * noise_scale + zp * (1. - noise_scale)
-        zr = noise_zr * noise_scale + zr * (1. - noise_scale)
+        zp = noise_zp * ns_p + zp * (1. - ns_p)
+        zr = noise_zr * ns_r + zr * (1. - ns_r)
         output_result(None, "copybot_z", (zp, zr))
+
+        # output to midi
+        chd = train_chd[random_indices]
+        recon = ec2vae_model.decoder(zp, zr, chd)
+        recon = recon.squeeze(0).cpu().numpy()
+        print(recon.shape)
+        utils.melprmat_to_midi_file(recon, "copybot_z.mid")
+        # recon = ec2vae_model.__class__.note_array_to_notes(recon, bpm=120, start=0.)
 
     funcs = [ours, ours_new, polyff_phl, train, val, remi_phl, copybot, copybot_z]
 
@@ -306,9 +324,11 @@ if __name__ == "__main__":
         nmat = get_nmat_from_midi(
             args.midi, [int(args.mel_track)], [int(args.chd_track)]
         )
-        num_bar = int(ceil((np.array(nmat)[:, 0] + np.array(nmat)[:, 2]).max() / 16))
+        num_bar = int(
+            ceil((np.array(nmat[1])[:, 0] + np.array(nmat[1])[:, 2]).max() / 16)
+        )
         print("num_bar:", num_bar)
-        nmats = [(nmat, num_bar)]
+        nmats = [(*nmat, num_bar)]
         mel = get_ec2vae_inputs(nmats, seg_len)
         output_result(mel, f"{fname}")
     else:
@@ -327,7 +347,7 @@ if __name__ == "__main__":
         elif args.type == "copybot":
             copybot()
         elif args.type == "copybot_z":
-            copybot_z(float(args.noise_scale))
+            copybot_z(float(args.ns_p), float(args.ns_r))
         else:
             for func in funcs:
                 func()

@@ -209,6 +209,21 @@ if __name__ == "__main__":
         mel = clean_sparse_segments(mel)
         output_result(mel, "copybot")
 
+    def copybot_z():
+        fpath = "copybot_z.mid"
+        nmat = get_nmat_from_midi(fpath, [0])
+        num_bar = int(ceil((np.array(nmat)[:, 0] + np.array(nmat)[:, 2]).max() / 16))
+        print("num_bar:", num_bar)
+
+        # get 1-bar melchroma
+        mel = utils.nmat_to_melchroma(nmat, num_bar)
+        print(mel.shape)
+        mel = mel.reshape([-1, 32, 12])
+        print(mel.shape)
+        mel = clean_sparse_segments(mel)
+        mel = mel.to(device)
+        output_result(mel, f"{fpath}")
+
     funcs = [ours, ours_new, polyff_phl, train, val, remi_phl, copybot]
 
     if args.midi is not None:
@@ -234,6 +249,8 @@ if __name__ == "__main__":
             remi_phl()
         elif args.type == "copybot":
             copybot()
+        elif args.type == "copybot_z":
+            copybot_z()
         else:
             for func in funcs:
                 func()
